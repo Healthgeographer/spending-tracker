@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weekly Spending Tracker</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            padding: 30px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+        
+        .chart-container {
+            position: relative;
+            margin-bottom: 30px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        
+        #chart {
+            width: 100%;
+            height: 300px;
+            display: block;
+        }
+        
+        .starting-balance {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .day-row {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .day-name {
+            font-weight: 600;
+            color: #333;
+            min-width: 100px;
+        }
+        
+        .spending-input {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex: 1;
+        }
+        
+        .spending-input label {
+            color: #666;
+            font-size: 14px;
+        }
+        
+        .spending-input input {
+            width: 120px;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        
+        .spending-input input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .reset-btn {
+            width: 100%;
+            padding: 15px;
+            background: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 20px;
+            transition: background 0.3s;
+        }
+        
+        .reset-btn:hover {
+            background: #c82333;
+        }
+        
+        .save-indicator {
+            text-align: center;
+            margin-top: 15px;
+            color: #666;
+            font-size: 14px;
+        }
+        
+        @media (max-width: 600px) {
+            .day-row {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .day-name {
+                min-width: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Weekly Spending Tracker</h1>
+        
+        <div class="chart-container">
+            <canvas id="chart" width="700" height="300"></canvas>
+        </div>
+        
+        <div class="starting-balance">Starting Balance: $800</div>
+        
+        <div id="dayInputs">
+            <div class="day-row">
+                <div class="day-name">Monday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Monday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Tuesday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Tuesday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Wednesday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Wednesday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Thursday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Thursday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Friday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Friday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Saturday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Saturday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+            <div class="day-row">
+                <div class="day-name">Sunday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Sunday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+            </div>
+        </div>
+        
+        <button class="reset-btn" onclick="resetAll()">Reset All</button>
+        
+        <div class="save-indicator">💾 Data automatically saved on this device</div>
+    </div>
+
+    <script>
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const initialBalance = 800;
+        
+        // Load saved data from localStorage
+        function loadData() {
+            const saved = localStorage.getItem('weeklySpending');
+            if (saved) {
+                const data = JSON.parse(saved);
+                days.forEach(day => {
+                    const input = document.getElementById(day);
+                    if (input && data[day]) {
+                        input.value = data[day];
+                    }
+                });
+            }
+        }
+        
+        // Save data to localStorage
+        function saveData() {
+            const data = {};
+            days.forEach(day => {
+                const input = document.getElementById(day);
+                if (input) {
+                    data[day] = input.value;
+                }
+            });
+            localStorage.setItem('weeklySpending', JSON.stringify(data));
+        }
+        
+        // Draw the chart
+        function drawChart() {
+            const canvas = document.getElementById('chart');
+            if (!canvas || !canvas.getContext) {
+                return;
+            }
+            
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            const padding = 50;
+            const chartWidth = width - padding * 2;
+            const chartHeight = height - padding * 2;
+            
+            ctx.clearRect(0, 0, width, height);
+            
+            // Calculate balances
+            const balances = [];
+            let currentBalance = initialBalance;
+            days.forEach(day => {
+                balances.push(currentBalance);
+                const input = document.getElementById(day);
+                const daySpending = input ? (parseFloat(input.value) || 0) : 0;
+                currentBalance -= daySpending;
+            });
+            
+            // Draw grid lines
+            ctx.strokeStyle = '#e0e0e0';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + (chartHeight / 4) * i;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+            
+            // Draw Y-axis labels
+            ctx.fillStyle = '#666';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'right';
+            ctx.textBaseline = 'middle';
+            for (let i = 0; i <= 4; i++) {
+                const value = 800 - (i * 200);
+                const y = padding + (chartHeight / 4) * i;
+                ctx.fillText('$' + value, padding - 10, y);
+            }
+            
+            // Draw X-axis labels
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            dayAbbr.forEach((day, i) => {
+                const x = padding + (chartWidth / 6) * i;
+                ctx.fillText(day, x, height - padding + 10);
+            });
+            
+            // Draw line
+            ctx.strokeStyle = '#667eea';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            
+            balances.forEach((balance, i) => {
+                const x = padding + (chartWidth / 6) * i;
+                const y = padding + chartHeight - (balance / 800) * chartHeight;
+                
+                if (i === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            
+            // Draw dots
+            ctx.fillStyle = '#667eea';
+            balances.forEach((balance, i) => {
+                const x = padding + (chartWidth / 6) * i;
+                const y = padding + chartHeight - (balance / 800) * chartHeight;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.fill();
+            });
+        }
+        
+        function updateChart() {
+            saveData();
+            drawChart();
+        }
+        
+        function resetAll() {
+            if (confirm('Are you sure you want to reset all spending data?')) {
+                days.forEach(day => {
+                    const input = document.getElementById(day);
+                    if (input) {
+                        input.value = '';
+                    }
+                });
+                localStorage.removeItem('weeklySpending');
+                updateChart();
+            }
+        }
+        
+        // Initialize
+        function init() {
+            loadData();
+            
+            days.forEach(day => {
+                const input = document.getElementById(day);
+                if (input) {
+                    input.addEventListener('input', updateChart);
+                }
+            });
+            
+            drawChart();
+        }
+        
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', init);
+        } else {
+            init();
+        }
+        
+        window.addEventListener('resize', drawChart);
+    </script>
+</body>
+</html>
