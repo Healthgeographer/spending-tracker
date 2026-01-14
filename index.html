@@ -122,6 +122,13 @@
             font-size: 14px;
         }
         
+        .sync-status {
+            text-align: center;
+            margin-top: 10px;
+            color: #28a745;
+            font-size: 12px;
+        }
+        
         @media (max-width: 600px) {
             .day-row {
                 flex-direction: column;
@@ -198,38 +205,73 @@
         
         <button class="reset-btn" onclick="resetAll()">Reset All</button>
         
-        <div class="save-indicator">💾 Data automatically saved on this device</div>
+        <div class="save-indicator">☁️ Data synced across all your devices</div>
+        <div class="sync-status" id="syncStatus"></div>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+
     <script>
+        // Firebase configuration - YOU NEED TO REPLACE THIS WITH YOUR OWN CONFIG
+        const firebaseConfig = {
+  apiKey: "AIzaSyCGb__-mR1cx6aNL6jx7-r3gNmYWUfbmtE",
+  authDomain: "spending-tracker-32d19.firebaseapp.com",
+  databaseURL: "https://spending-tracker-32d19-default-rtdb.firebaseio.com",
+  projectId: "spending-tracker-32d19",
+  storageBucket: "spending-tracker-32d19.firebasestorage.app",
+  messagingSenderId: "380249343428",
+  appId: "1:380249343428:web:11c40f5ea5085638c45091"
+};
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const spendingRef = database.ref('spending');
+
         const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
         const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
         const initialBalance = 800;
         
-        // Load saved data from localStorage
-        function loadData() {
-            const saved = localStorage.getItem('weeklySpending');
-            if (saved) {
-                const data = JSON.parse(saved);
+        let isUpdating = false;
+
+        // Listen for data changes from Firebase
+        spendingRef.on('value', (snapshot) => {
+            if (isUpdating) return;
+            
+            const data = snapshot.val();
+            if (data) {
                 days.forEach(day => {
                     const input = document.getElementById(day);
-                    if (input && data[day]) {
+                    if (input && data[day] !== undefined) {
                         input.value = data[day];
                     }
                 });
+                drawChart();
+                showSyncStatus('Synced ✓');
             }
-        }
-        
-        // Save data to localStorage
-        function saveData() {
-            const data = {};
-            days.forEach(day => {
-                const input = document.getElementById(day);
-                if (input) {
-                    data[day] = input.value;
-                }
+        });
+
+        // Save data to Firebase
+        function saveData(day, value) {
+            isUpdating = true;
+            spendingRef.child(day).set(value).then(() => {
+                isUpdating = false;
+                showSyncStatus('Saved ✓');
+            }).catch((error) => {
+                isUpdating = false;
+                showSyncStatus('Error saving');
+                console.error('Error:', error);
             });
-            localStorage.setItem('weeklySpending', JSON.stringify(data));
+        }
+
+        function showSyncStatus(message) {
+            const status = document.getElementById('syncStatus');
+            status.textContent = message;
+            setTimeout(() => {
+                status.textContent = '';
+            }, 2000);
         }
         
         // Draw the chart
@@ -318,31 +360,32 @@
         }
         
         function updateChart() {
-            saveData();
             drawChart();
         }
         
         function resetAll() {
-            if (confirm('Are you sure you want to reset all spending data?')) {
+            if (confirm('Are you sure you want to reset all spending data? This will clear data on all devices.')) {
                 days.forEach(day => {
                     const input = document.getElementById(day);
                     if (input) {
                         input.value = '';
                     }
                 });
-                localStorage.removeItem('weeklySpending');
+                spendingRef.remove();
                 updateChart();
+                showSyncStatus('All data cleared ✓');
             }
         }
         
         // Initialize
         function init() {
-            loadData();
-            
             days.forEach(day => {
                 const input = document.getElementById(day);
                 if (input) {
-                    input.addEventListener('input', updateChart);
+                    input.addEventListener('input', (e) => {
+                        saveData(day, e.target.value);
+                        updateChart();
+                    });
                 }
             });
             
