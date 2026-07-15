@@ -10,14 +10,14 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             padding: 20px;
         }
-        
+
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -26,14 +26,14 @@
             box-shadow: 0 10px 40px rgba(0,0,0,0.2);
             padding: 30px;
         }
-        
+
         h1 {
             text-align: center;
             color: #333;
             margin-bottom: 30px;
             font-size: 28px;
         }
-        
+
         .chart-container {
             position: relative;
             margin-bottom: 30px;
@@ -41,20 +41,20 @@
             border-radius: 8px;
             padding: 20px;
         }
-        
+
         #chart {
             width: 100%;
             height: 300px;
             display: block;
         }
-        
+
         .starting-balance {
             font-weight: 600;
             color: #555;
             margin-bottom: 15px;
             font-size: 14px;
         }
-        
+
         .day-row {
             display: flex;
             align-items: center;
@@ -64,25 +64,25 @@
             border-radius: 8px;
             margin-bottom: 10px;
         }
-        
+
         .day-name {
             font-weight: 600;
             color: #333;
             min-width: 100px;
         }
-        
+
         .spending-input {
             display: flex;
             align-items: center;
             gap: 8px;
             flex: 1;
         }
-        
+
         .spending-input label {
             color: #666;
             font-size: 14px;
         }
-        
+
         .spending-input input {
             width: 120px;
             padding: 8px 12px;
@@ -91,12 +91,12 @@
             font-size: 16px;
             transition: border-color 0.3s;
         }
-        
+
         .spending-input input:focus {
             outline: none;
             border-color: #667eea;
         }
-        
+
         .reset-btn {
             width: 100%;
             padding: 15px;
@@ -110,31 +110,32 @@
             margin-top: 20px;
             transition: background 0.3s;
         }
-        
+
         .reset-btn:hover {
             background: #c82333;
         }
-        
+
         .save-indicator {
             text-align: center;
             margin-top: 15px;
             color: #666;
             font-size: 14px;
         }
-        
+
         .sync-status {
             text-align: center;
             margin-top: 10px;
             color: #28a745;
             font-size: 12px;
+            min-height: 16px;
         }
-        
+
         @media (max-width: 600px) {
             .day-row {
                 flex-direction: column;
                 align-items: flex-start;
             }
-            
+
             .day-name {
                 min-width: auto;
             }
@@ -144,13 +145,13 @@
 <body>
     <div class="container">
         <h1>Weekly Spending Tracker</h1>
-        
+
         <div class="chart-container">
             <canvas id="chart" width="700" height="300"></canvas>
         </div>
-        
-        <div class="starting-balance">Starting Balance: $800</div>
-        
+
+        <div class="starting-balance" id="startingBalanceLabel"></div>
+
         <div id="dayInputs">
             <div class="day-row">
                 <div class="day-name">Monday</div>
@@ -202,10 +203,10 @@
                 </div>
             </div>
         </div>
-        
+
         <button class="reset-btn" onclick="resetAll()">Reset All</button>
-        
-        <div class="save-indicator">☁️ Data synced across all your devices</div>
+
+        <div class="save-indicator">&#9729;&#65039; Data synced across all your devices</div>
         <div class="sync-status" id="syncStatus"></div>
     </div>
 
@@ -214,10 +215,20 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
     <script>
-        // Wait for Firebase to load
-        let database, spendingRef, firebaseListener;
-        
-        // Firebase configuration
+        // ============================================================
+        // SETTINGS - change the weekly maximum here in ONE place.
+        // Everything (starting balance, chart axis, scaling) uses this.
+        // ============================================================
+        const WEEKLY_MAX = 1000;   // weekly starting balance / chart maximum
+        const AXIS_STEP  = 200;    // spacing between Y-axis labels
+
+        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+        const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+        let database, spendingRef;
+        let isUpdating = false;   // guards against the Firebase echo while we write
+
+        // ---- Firebase setup -------------------------------------------------
         const firebaseConfig = {
             apiKey: "AIzaSyCGb__-mR1cx6aNL6jx7-r3gNmYWUfbmtE",
             authDomain: "spending-tracker-32d19.firebaseapp.com",
@@ -228,231 +239,196 @@
             appId: "1:380249343428:web:11c40f5ea5085638c45091"
         };
 
-        // Initialize Firebase when ready
         function initFirebase() {
             if (typeof firebase !== 'undefined') {
                 firebase.initializeApp(firebaseConfig);
                 database = firebase.database();
                 spendingRef = database.ref('spending');
-                setupFirebaseListeners();
+
+                // Whenever the cloud data changes (from this or any other device),
+                // mirror it into the inputs. If data is null (a reset), clear them.
+                spendingRef.on('value', function (snapshot) {
+                    if (isUpdating) return;
+                    const data = snapshot.val();
+                    days.forEach(function (day) {
+                        const input = document.getElementById(day);
+                        if (!input) return;
+                        input.value = (data && data[day] != null) ? data[day] : '';
+                    });
+                    drawChart();
+                });
             } else {
                 setTimeout(initFirebase, 100);
             }
         }
-        
         initFirebase();
 
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-        const initialBalance = 800;
-        
-        let isUpdating = false;
-
-        // Setup Firebase listeners
-        function setupFirebaseListeners() {
-            // Listen for data changes from Firebase
-            spendingRef.on('value', (snapshot) => {
-                if (isUpdating) return;
-                
-                const data = snapshot.val();
-                if (data) {
-                    days.forEach(day => {
-                        const input = document.getElementById(day);
-                        if (input && data[day] !== undefined && data[day] !== null) {
-                            input.value = data[day];
-                        }
-                    });
-                    drawChart();
-                }
-            });
-        }
-
-        // Save data to Firebase
+        // ---- Saving ---------------------------------------------------------
         function saveData(day, value) {
             if (!spendingRef) return;
-            
             isUpdating = true;
-            spendingRef.child(day).set(value).then(() => {
-                isUpdating = false;
-                showSyncStatus('Saved ✓');
-            }).catch((error) => {
-                isUpdating = false;
-                showSyncStatus('Error saving');
-                console.error('Error:', error);
-            });
+            spendingRef.child(day).set(value)
+                .then(function () {
+                    isUpdating = false;
+                    showSyncStatus('Saved \u2713');
+                })
+                .catch(function (error) {
+                    isUpdating = false;
+                    showSyncStatus('Error saving');
+                    console.error('Error saving:', error);
+                });
         }
 
         function showSyncStatus(message) {
             const status = document.getElementById('syncStatus');
+            if (!status) return;
             status.textContent = message;
-            setTimeout(() => {
-                status.textContent = '';
-            }, 2000);
+            setTimeout(function () { status.textContent = ''; }, 2000);
         }
-        
-        // Draw the chart
+
+        // ---- Chart ----------------------------------------------------------
         function drawChart() {
             const canvas = document.getElementById('chart');
-            if (!canvas || !canvas.getContext) {
-                return;
-            }
-            
+            if (!canvas || !canvas.getContext) return;
+
             const ctx = canvas.getContext('2d');
             const width = canvas.width;
             const height = canvas.height;
             const padding = 50;
             const chartWidth = width - padding * 2;
             const chartHeight = height - padding * 2;
-            
+            const divisions = Math.round(WEEKLY_MAX / AXIS_STEP);
+
             ctx.clearRect(0, 0, width, height);
-            
-            // Calculate balances
+
+            // Running balance for each day
             const balances = [];
-            let currentBalance = initialBalance;
-            days.forEach(day => {
+            let currentBalance = WEEKLY_MAX;
+            days.forEach(function (day) {
                 balances.push(currentBalance);
                 const input = document.getElementById(day);
                 const daySpending = input ? (parseFloat(input.value) || 0) : 0;
                 currentBalance -= daySpending;
             });
-            
-            // Draw grid lines
+
+            // Grid lines
             ctx.strokeStyle = '#e0e0e0';
             ctx.lineWidth = 1;
-            for (let i = 0; i <= 4; i++) {
-                const y = padding + (chartHeight / 4) * i;
+            for (let i = 0; i <= divisions; i++) {
+                const y = padding + (chartHeight / divisions) * i;
                 ctx.beginPath();
                 ctx.moveTo(padding, y);
                 ctx.lineTo(width - padding, y);
                 ctx.stroke();
             }
-            
-            // Draw Y-axis labels
+
+            // Y-axis labels
             ctx.fillStyle = '#666';
             ctx.font = '14px sans-serif';
             ctx.textAlign = 'right';
             ctx.textBaseline = 'middle';
-            for (let i = 0; i <= 4; i++) {
-                const value = 800 - (i * 200);
-                const y = padding + (chartHeight / 4) * i;
+            for (let i = 0; i <= divisions; i++) {
+                const value = WEEKLY_MAX - (i * AXIS_STEP);
+                const y = padding + (chartHeight / divisions) * i;
                 ctx.fillText('$' + value, padding - 10, y);
             }
-            
-            // Draw X-axis labels
+
+            // X-axis labels
             ctx.textAlign = 'center';
             ctx.textBaseline = 'top';
-            dayAbbr.forEach((day, i) => {
+            dayAbbr.forEach(function (day, i) {
                 const x = padding + (chartWidth / 6) * i;
                 ctx.fillText(day, x, height - padding + 10);
             });
-            
-            // Draw line
+
+            // Line
             ctx.strokeStyle = '#667eea';
             ctx.lineWidth = 3;
             ctx.beginPath();
-            
-            balances.forEach((balance, i) => {
+            balances.forEach(function (balance, i) {
                 const x = padding + (chartWidth / 6) * i;
-                const y = padding + chartHeight - (balance / 800) * chartHeight;
-                
-                if (i === 0) {
-                    ctx.moveTo(x, y);
-                } else {
-                    ctx.lineTo(x, y);
-                }
+                const y = padding + chartHeight - (balance / WEEKLY_MAX) * chartHeight;
+                if (i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); }
             });
             ctx.stroke();
-            
-            // Draw dots
+
+            // Dots
             ctx.fillStyle = '#667eea';
-            balances.forEach((balance, i) => {
+            balances.forEach(function (balance, i) {
                 const x = padding + (chartWidth / 6) * i;
-                const y = padding + chartHeight - (balance / 800) * chartHeight;
-                
+                const y = padding + chartHeight - (balance / WEEKLY_MAX) * chartHeight;
                 ctx.beginPath();
                 ctx.arc(x, y, 6, 0, Math.PI * 2);
                 ctx.fill();
             });
-            
-            // Draw balance labels
+
+            // Balance labels above each point
             ctx.fillStyle = '#333';
             ctx.font = 'bold 13px sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'bottom';
-            balances.forEach((balance, i) => {
+            balances.forEach(function (balance, i) {
                 const x = padding + (chartWidth / 6) * i;
-                const y = padding + chartHeight - (balance / 800) * chartHeight;
-                
+                const y = padding + chartHeight - (balance / WEEKLY_MAX) * chartHeight;
                 ctx.fillText('$' + balance.toFixed(0), x, y - 12);
             });
         }
-        
-        function updateChart() {
-            drawChart();
-        }
-        
+
+        // ---- Reset ----------------------------------------------------------
         function resetAll() {
             if (!confirm('Are you sure you want to reset all spending data? This will clear data on all devices.')) {
                 return;
             }
-            
-            console.log('Starting reset...');
-            isUpdating = true;
-            
-            // Clear all inputs locally first
-            days.forEach(day => {
+
+            // Clear locally right away so the screen responds instantly.
+            days.forEach(function (day) {
                 const input = document.getElementById(day);
-                if (input) {
-                    input.value = '';
-                }
+                if (input) input.value = '';
             });
-            
             drawChart();
-            
-            // Remove from Firebase
+
+            // Clear the cloud copy. Guard the echo so the listener doesn't fight us.
             if (spendingRef) {
-                console.log('Removing from Firebase...');
+                isUpdating = true;
                 spendingRef.remove()
-                    .then(() => {
-                        console.log('Firebase data removed successfully');
-                        setTimeout(() => {
-                            isUpdating = false;
-                            showSyncStatus('All data cleared ✓');
-                        }, 1000);
+                    .then(function () {
+                        isUpdating = false;
+                        showSyncStatus('All data cleared \u2713');
                     })
-                    .catch((error) => {
-                        console.error('Error removing data:', error);
+                    .catch(function (error) {
                         isUpdating = false;
                         showSyncStatus('Error: ' + error.message);
+                        console.error('Error clearing data:', error);
                     });
             } else {
-                console.log('No Firebase reference');
-                isUpdating = false;
-                showSyncStatus('All data cleared ✓');
+                showSyncStatus('All data cleared \u2713');
             }
         }
-        
-        // Initialize
+
+        // ---- Startup --------------------------------------------------------
         function init() {
-            days.forEach(day => {
+            document.getElementById('startingBalanceLabel').textContent =
+                'Starting Balance: $' + WEEKLY_MAX;
+
+            days.forEach(function (day) {
                 const input = document.getElementById(day);
                 if (input) {
-                    input.addEventListener('input', (e) => {
+                    input.addEventListener('input', function (e) {
                         saveData(day, e.target.value);
-                        updateChart();
+                        drawChart();
                     });
                 }
             });
-            
+
             drawChart();
         }
-        
+
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', init);
         } else {
             init();
         }
-        
+
         window.addEventListener('resize', drawChart);
     </script>
 </body>
