@@ -97,6 +97,24 @@
             border-color: #667eea;
         }
 
+        .remaining-balance {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .remaining-balance label {
+            color: #666;
+            font-size: 14px;
+        }
+
+        .remaining-balance .amount {
+            font-weight: 700;
+            color: #667eea;
+            min-width: 90px;
+            text-align: right;
+        }
+
         .reset-btn {
             width: 100%;
             padding: 15px;
@@ -154,10 +172,25 @@
 
         <div id="dayInputs">
             <div class="day-row">
+                <div class="day-name">Sunday</div>
+                <div class="spending-input">
+                    <label>Spending:</label>
+                    <input type="number" id="Sunday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Sunday"></span>
+                </div>
+            </div>
+            <div class="day-row">
                 <div class="day-name">Monday</div>
                 <div class="spending-input">
                     <label>Spending:</label>
                     <input type="number" id="Monday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Monday"></span>
                 </div>
             </div>
             <div class="day-row">
@@ -166,12 +199,20 @@
                     <label>Spending:</label>
                     <input type="number" id="Tuesday" min="0" step="0.01" value="" placeholder="0.00">
                 </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Tuesday"></span>
+                </div>
             </div>
             <div class="day-row">
                 <div class="day-name">Wednesday</div>
                 <div class="spending-input">
                     <label>Spending:</label>
                     <input type="number" id="Wednesday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Wednesday"></span>
                 </div>
             </div>
             <div class="day-row">
@@ -180,12 +221,20 @@
                     <label>Spending:</label>
                     <input type="number" id="Thursday" min="0" step="0.01" value="" placeholder="0.00">
                 </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Thursday"></span>
+                </div>
             </div>
             <div class="day-row">
                 <div class="day-name">Friday</div>
                 <div class="spending-input">
                     <label>Spending:</label>
                     <input type="number" id="Friday" min="0" step="0.01" value="" placeholder="0.00">
+                </div>
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Friday"></span>
                 </div>
             </div>
             <div class="day-row">
@@ -194,12 +243,9 @@
                     <label>Spending:</label>
                     <input type="number" id="Saturday" min="0" step="0.01" value="" placeholder="0.00">
                 </div>
-            </div>
-            <div class="day-row">
-                <div class="day-name">Sunday</div>
-                <div class="spending-input">
-                    <label>Spending:</label>
-                    <input type="number" id="Sunday" min="0" step="0.01" value="" placeholder="0.00">
+                <div class="remaining-balance">
+                    <label>Remaining:</label>
+                    <span class="amount" id="remaining-Saturday"></span>
                 </div>
             </div>
         </div>
@@ -211,8 +257,8 @@
     </div>
 
     <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script crossorigin="anonymous" src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 
     <script>
         // ============================================================
@@ -222,8 +268,8 @@
         const WEEKLY_MAX = 1000;   // weekly starting balance / chart maximum
         const AXIS_STEP  = 200;    // spacing between Y-axis labels
 
-        const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-        const dayAbbr = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+        const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+        const dayAbbr = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
         let database, spendingRef;
         let isUpdating = false;   // guards against the Firebase echo while we write
@@ -241,22 +287,26 @@
 
         function initFirebase() {
             if (typeof firebase !== 'undefined') {
-                firebase.initializeApp(firebaseConfig);
-                database = firebase.database();
-                spendingRef = database.ref('spending');
+                try {
+                    firebase.initializeApp(firebaseConfig);
+                    database = firebase.database();
+                    spendingRef = database.ref('spending');
 
-                // Whenever the cloud data changes (from this or any other device),
-                // mirror it into the inputs. If data is null (a reset), clear them.
-                spendingRef.on('value', function (snapshot) {
-                    if (isUpdating) return;
-                    const data = snapshot.val();
-                    days.forEach(function (day) {
-                        const input = document.getElementById(day);
-                        if (!input) return;
-                        input.value = (data && data[day] != null) ? data[day] : '';
+                    // Whenever the cloud data changes (this or any other device),
+                    // mirror it into the inputs. If data is null (a reset), clear them.
+                    spendingRef.on('value', function (snapshot) {
+                        if (isUpdating) return;
+                        const data = snapshot.val();
+                        days.forEach(function (day) {
+                            const input = document.getElementById(day);
+                            if (!input) return;
+                            input.value = (data && data[day] != null) ? data[day] : '';
+                        });
+                        drawChart();
                     });
-                    drawChart();
-                });
+                } catch (err) {
+                    console.error('Firebase init failed:', err);
+                }
             } else {
                 setTimeout(initFirebase, 100);
             }
@@ -302,13 +352,21 @@
             ctx.clearRect(0, 0, width, height);
 
             // Running balance for each day
-            const balances = [];
+            const balances = [];      // balance at the START of each day (used to plot the line)
+            const remaining = [];     // balance AFTER that day's spending (shown in the column)
             let currentBalance = WEEKLY_MAX;
             days.forEach(function (day) {
                 balances.push(currentBalance);
                 const input = document.getElementById(day);
                 const daySpending = input ? (parseFloat(input.value) || 0) : 0;
                 currentBalance -= daySpending;
+                remaining.push(currentBalance);
+            });
+
+            // Fill in the "Remaining" column beside each day
+            days.forEach(function (day, i) {
+                const cell = document.getElementById('remaining-' + day);
+                if (cell) cell.textContent = '$' + remaining[i].toFixed(2);
             });
 
             // Grid lines
@@ -407,8 +465,8 @@
 
         // ---- Startup --------------------------------------------------------
         function init() {
-            document.getElementById('startingBalanceLabel').textContent =
-                'Starting Balance: $' + WEEKLY_MAX;
+            const label = document.getElementById('startingBalanceLabel');
+            if (label) label.textContent = 'Starting Balance: $' + WEEKLY_MAX;
 
             days.forEach(function (day) {
                 const input = document.getElementById(day);
